@@ -282,7 +282,7 @@ echo ""
 # Bash waits until PHP exits.
 
 set +e
-php arix install
+php artisan arix install
 INSTALL_EXIT_CODE=$?
 set -e
 
