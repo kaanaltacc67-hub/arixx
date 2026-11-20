@@ -7,7 +7,7 @@ set -Eeuo pipefail
 # ==========================================
 
 PANEL_DIR="/var/www/pterodactyl"
-ZIP_URL="https://github.com/kaanaltacc67-hub/arixx/files.zip"
+ZIP_URL="https://raw.githubusercontent.com/kaanaltacc67-hub/arixx/main/files.zip"
 ZIP_FILE="$PANEL_DIR/files.zip"
 
 GREEN='\033[0;32m'
