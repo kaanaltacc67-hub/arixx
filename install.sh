@@ -1,10 +1,9 @@
-
 #!/usr/bin/env bash
 
 set -Eeuo pipefail
 
 # ==========================================
-#             ARIX THEME INSTALLER
+# ARIX THEME INSTALLER
 # ==========================================
 
 PANEL_DIR="/var/www/pterodactyl"
@@ -25,12 +24,8 @@ success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
-warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
 error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "${RED}[ERROR]${NC} $1" >&2
     exit 1
 }
 
@@ -38,20 +33,17 @@ error() {
 # TERMINAL INPUT
 # ==========================================
 
-# Use a separate file descriptor for terminal input.
-# This allows curl | sudo bash to work correctly.
-
-if ! { exec 3<>/dev/tty; } 2>/dev/null; then
-    error "No interactive terminal available."
+if [[ ! -r /dev/tty ]]; then
+    error "Interactive terminal not found."
 fi
 
 ask() {
     local prompt="$1"
-    local variable="$2"
+    local result
 
-    printf "%b" "$prompt" >/dev/tty
+    read -r -p "$prompt" result </dev/tty || error "Input failed."
 
-    IFS= read -r -u 3 "$variable" || error "Failed to read terminal input."
+    REPLY="$result"
 }
 
 # ==========================================
@@ -59,11 +51,11 @@ ask() {
 # ==========================================
 
 if [[ "$EUID" -ne 0 ]]; then
-    error "Please run this installer as root."
+    error "Run this script as root."
 fi
 
 # ==========================================
-# OPERATING SYSTEM CHECK
+# OS CHECK
 # ==========================================
 
 if [[ ! -f /etc/os-release ]]; then
@@ -79,7 +71,7 @@ case "$ID" in
                 success "Ubuntu $VERSION_ID detected."
                 ;;
             *)
-                error "Supported Ubuntu versions: 22.04 and 24.04."
+                error "Only Ubuntu 22.04 and 24.04 are supported."
                 ;;
         esac
         ;;
@@ -90,18 +82,18 @@ case "$ID" in
                 success "Debian $VERSION_ID detected."
                 ;;
             *)
-                error "Supported Debian versions: 11, 12 and 13."
+                error "Unsupported Debian version."
                 ;;
         esac
         ;;
 
     *)
-        error "Unsupported operating system: $ID"
+        error "Unsupported OS: $ID"
         ;;
 esac
 
 # ==========================================
-# PANEL DIRECTORY CHECK
+# PANEL CHECK
 # ==========================================
 
 echo ""
@@ -111,11 +103,11 @@ echo "======================================"
 echo ""
 
 if [[ ! -d "$PANEL_DIR" ]]; then
-    error "Pterodactyl panel directory not found: $PANEL_DIR"
+    error "Pterodactyl directory not found."
 fi
 
 if [[ ! -f "$PANEL_DIR/package.json" ]]; then
-    error "Pterodactyl package.json not found."
+    error "Invalid Pterodactyl directory."
 fi
 
 success "Pterodactyl panel directory found."
@@ -133,16 +125,15 @@ echo "[2] Yes"
 echo "[3] No (end the script)"
 echo ""
 
-ask "Choose an option [1-3]: " choice
+ask "Choose an option [1-3]: "
+choice="$REPLY"
 
 case "$choice" in
     1)
-        info "Installing panel build dependencies..."
+        info "Installing Node.js 22..."
 
         apt-get update -y
         apt-get install -y curl ca-certificates
-
-        info "Setting up Node.js 22..."
 
         curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 
@@ -152,15 +143,15 @@ case "$choice" in
 
         npm install -g yarn
 
-        success "Dependencies installed."
+        success "Node.js and Yarn installed."
         ;;
 
     2)
-        info "Checking installed dependencies..."
+        info "Checking dependencies..."
 
-        command -v node >/dev/null 2>&1 || error "Node.js is not installed."
-        command -v npm >/dev/null 2>&1 || error "NPM is not installed."
-        command -v yarn >/dev/null 2>&1 || error "Yarn is not installed."
+        command -v node >/dev/null 2>&1 || error "Node.js missing."
+        command -v npm >/dev/null 2>&1 || error "NPM missing."
+        command -v yarn >/dev/null 2>&1 || error "Yarn missing."
 
         NODE_VERSION=$(node -p "Number(process.versions.node.split('.')[0])")
 
@@ -177,7 +168,7 @@ case "$choice" in
         ;;
 
     *)
-        error "Invalid option. Please choose 1, 2 or 3."
+        error "Invalid option: $choice"
         ;;
 esac
 
@@ -185,7 +176,7 @@ esac
 # INSTALL BUILD TOOLS
 # ==========================================
 
-apt-get install -y curl ca-certificates unzip
+apt-get install -y unzip
 
 # ==========================================
 # BUILD PANEL
@@ -193,20 +184,20 @@ apt-get install -y curl ca-certificates unzip
 
 cd "$PANEL_DIR"
 
-info "Installing panel packages..."
+info "Running yarn..."
 
 yarn
 
-info "Building production assets..."
-
 export NODE_OPTIONS=--openssl-legacy-provider
+
+info "Building production assets..."
 
 yarn build:production
 
-success "Panel build completed!"
+success "Production build completed."
 
 # ==========================================
-# ARIX THEME CONFIRMATION
+# ARIX CONFIRMATION
 # ==========================================
 
 echo ""
@@ -215,67 +206,64 @@ echo "          ARIX THEME SETUP"
 echo "======================================"
 echo ""
 
-ask "Do you want to continue installing Arix Theme? [y/N]: " arix_choice
+ask "Do you want to continue installing Arix Theme? [y/N]: "
+arix_choice="$REPLY"
 
 case "$arix_choice" in
     y|Y|yes|YES|Yes)
-        info "Continuing Arix Theme installation..."
+        info "Starting Arix installation..."
         ;;
     *)
-        info "Arix Theme installation skipped."
+        info "Arix installation skipped."
         exit 0
         ;;
 esac
 
 # ==========================================
-# DOWNLOAD ARIX THEME
+# DOWNLOAD
 # ==========================================
 
 cd "$PANEL_DIR"
 
-info "Downloading Arix Theme files..."
+info "Downloading Arix files..."
 
 rm -f "$ZIP_FILE"
 
 curl -fL --retry 3 "$ZIP_URL" -o "$ZIP_FILE" \
-    || error "Failed to download Arix Theme."
+    || error "Download failed."
 
-success "Arix Theme downloaded."
+success "Download completed."
 
 # ==========================================
-# EXTRACT FILES
+# EXTRACT
 # ==========================================
 
-info "Extracting Arix Theme files..."
+info "Extracting files..."
 
 unzip -o "$ZIP_FILE" -d "$PANEL_DIR" \
-    || error "Failed to extract Arix Theme."
+    || error "Extraction failed."
 
 # ==========================================
-# REMOVE ZIP
+# DELETE ZIP
 # ==========================================
-
-info "Removing downloaded ZIP..."
 
 rm -f "$ZIP_FILE"
 
-success "ZIP file removed."
+success "ZIP deleted."
 
 # ==========================================
-# RUN ARIX INSTALLER
+# ARIX INSTALLER
 # ==========================================
 
 cd "$PANEL_DIR"
 
-if ! command -v php >/dev/null 2>&1; then
-    error "PHP is not installed."
-fi
+command -v php >/dev/null 2>&1 || error "PHP not installed."
 
-info "Running Arix installer..."
+info "Running PHP Arix installer..."
 
 php install arix
 
-success "Arix installer executed."
+success "Arix installer completed."
 
 # ==========================================
 # FINISHED
@@ -283,5 +271,5 @@ success "Arix installer executed."
 
 echo ""
 echo "======================================"
-echo -e "${GREEN}       INSTALLATION FINISHED!${NC}"
+echo -e "${GREEN} INSTALLATION FINISHED! ${NC}"
 echo "======================================"
