@@ -217,7 +217,7 @@ command -v php >/dev/null 2>&1 || error "PHP is not installed."
 
 info "Running Arix installer..."
 
-php install arix
+php arix install
 
 success "Arix Theme installation completed!"
 
