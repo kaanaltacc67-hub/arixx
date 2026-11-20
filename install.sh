@@ -1,7 +1,10 @@
-
 #!/usr/bin/env bash
 
 set -Eeuo pipefail
+
+# ==========================================
+# ARIX THEME INSTALLER
+# ==========================================
 
 PANEL_DIR="/var/www/pterodactyl"
 ZIP_URL="https://raw.githubusercontent.com/kaanaltacc67-hub/arixx/main/files.zip"
@@ -19,6 +22,10 @@ info() {
 
 success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
 error() {
@@ -47,28 +54,42 @@ ask() {
 # ==========================================
 
 if [[ "$EUID" -ne 0 ]]; then
-    error "Please run as root."
+    error "Please run this script as root."
 fi
 
 # ==========================================
 # OS CHECK
 # ==========================================
 
+if [[ ! -f /etc/os-release ]]; then
+    error "Cannot detect operating system."
+fi
+
 source /etc/os-release
 
 case "$ID" in
     ubuntu)
         case "$VERSION_ID" in
-            22.04|24.04) success "Ubuntu $VERSION_ID detected." ;;
-            *) error "Only Ubuntu 22.04 and 24.04 supported." ;;
+            22.04|24.04)
+                success "Ubuntu $VERSION_ID detected."
+                ;;
+            *)
+                error "Only Ubuntu 22.04 and 24.04 are supported."
+                ;;
         esac
         ;;
+
     debian)
         case "$VERSION_ID" in
-            11|12|13) success "Debian $VERSION_ID detected." ;;
-            *) error "Unsupported Debian version." ;;
+            11|12|13)
+                success "Debian $VERSION_ID detected."
+                ;;
+            *)
+                error "Unsupported Debian version."
+                ;;
         esac
         ;;
+
     *)
         error "Unsupported operating system: $ID"
         ;;
@@ -84,8 +105,13 @@ echo "       ARIX THEME INSTALLER"
 echo "======================================"
 echo ""
 
-[[ -d "$PANEL_DIR" ]] || error "Pterodactyl directory not found."
-[[ -f "$PANEL_DIR/package.json" ]] || error "Invalid Pterodactyl directory."
+if [[ ! -d "$PANEL_DIR" ]]; then
+    error "Pterodactyl directory not found."
+fi
+
+if [[ ! -f "$PANEL_DIR/package.json" ]]; then
+    error "Invalid Pterodactyl directory."
+fi
 
 success "Pterodactyl panel directory found."
 
@@ -106,38 +132,48 @@ ask "Choose an option [1-3]: "
 choice="$REPLY"
 
 case "$choice" in
+
     1)
-        # Install dependencies and build
-        info "Installing Node.js 22..."
+        # Install Node.js 22 and Yarn
+
+        info "Installing required packages..."
 
         apt-get update -y
-        apt-get install -y curl ca-certificates
+        apt-get install -y curl ca-certificates unzip
+
+        info "Installing Node.js 22..."
 
         curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 
         apt-get install -y nodejs
 
         info "Installing Yarn..."
+
         npm install -g yarn
+
+        # Build panel
 
         cd "$PANEL_DIR"
 
-        info "Installing packages..."
+        info "Installing panel packages..."
+
         yarn
 
         export NODE_OPTIONS=--openssl-legacy-provider
 
         info "Building production assets..."
+
         yarn build:production
 
-        success "Dependencies installed and build completed."
+        success "Panel build completed."
         ;;
 
     2)
-        # IMPORTANT:
-        # Skip ALL dependency installation and build commands.
+        # Skip ALL dependency installation and build operations.
+
         info "Skipping dependency installation."
-        info "Going directly to Arix Theme installation."
+        info "Skipping panel build."
+        info "Proceeding directly to Arix installation."
         ;;
 
     3)
@@ -165,7 +201,7 @@ arix_choice="$REPLY"
 
 case "$arix_choice" in
     y|Y|yes|YES|Yes)
-        info "Starting Arix Theme installation..."
+        info "Continuing Arix installation..."
         ;;
     *)
         info "Arix installation skipped."
@@ -174,9 +210,12 @@ case "$arix_choice" in
 esac
 
 # ==========================================
-# DOWNLOAD TOOLS
+# INSTALL REQUIRED TOOLS
 # ==========================================
 
+info "Checking required tools..."
+
+apt-get update -y
 apt-get install -y curl unzip
 
 # ==========================================
@@ -195,17 +234,32 @@ curl -fL --retry 3 "$ZIP_URL" -o "$ZIP_FILE" \
 success "Arix Theme downloaded."
 
 # ==========================================
-# EXTRACT
+# EXTRACT ARIX
 # ==========================================
 
 info "Extracting Arix Theme..."
 
 unzip -o "$ZIP_FILE" -d "$PANEL_DIR" \
-    || error "Extraction failed."
+    || error "Failed to extract Arix Theme."
+
+success "Arix files extracted."
+
+# ==========================================
+# DELETE ZIP
+# ==========================================
+
+info "Removing ZIP file..."
 
 rm -f "$ZIP_FILE"
 
-success "ZIP extracted and deleted."
+success "ZIP file removed."
+
+# ==========================================
+# PHP CHECK
+# ==========================================
+
+command -v php >/dev/null 2>&1 \
+    || error "PHP is not installed."
 
 # ==========================================
 # RUN ARIX INSTALLER
@@ -213,15 +267,35 @@ success "ZIP extracted and deleted."
 
 cd "$PANEL_DIR"
 
-command -v php >/dev/null 2>&1 || error "PHP is not installed."
+echo ""
+echo "======================================"
+echo "       ARIX INSTALLATION"
+echo "======================================"
+echo ""
 
-info "Running Arix installer..."
+info "Starting Arix installer..."
+info "Waiting for installer to finish..."
+echo ""
 
+# Run directly so all installer output is visible.
+# Bash waits until PHP exits.
+
+set +e
 php arix install
+INSTALL_EXIT_CODE=$?
+set -e
 
-success "Arix Theme installation completed!"
+echo ""
+
+if [[ "$INSTALL_EXIT_CODE" -ne 0 ]]; then
+    error "Arix installer failed with exit code: $INSTALL_EXIT_CODE"
+fi
+
+# ==========================================
+# FINISHED
+# ==========================================
 
 echo ""
 echo "======================================"
-echo -e "${GREEN} INSTALLATION FINISHED! ${NC}"
+success "ARIX INSTALLATION FINISHED!"
 echo "======================================"
