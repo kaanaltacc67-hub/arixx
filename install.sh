@@ -1,10 +1,7 @@
+
 #!/usr/bin/env bash
 
 set -Eeuo pipefail
-
-# ==========================================
-# ARIX THEME INSTALLER
-# ==========================================
 
 PANEL_DIR="/var/www/pterodactyl"
 ZIP_URL="https://raw.githubusercontent.com/kaanaltacc67-hub/arixx/main/files.zip"
@@ -42,7 +39,6 @@ ask() {
     local result
 
     read -r -p "$prompt" result </dev/tty || error "Input failed."
-
     REPLY="$result"
 }
 
@@ -51,44 +47,30 @@ ask() {
 # ==========================================
 
 if [[ "$EUID" -ne 0 ]]; then
-    error "Run this script as root."
+    error "Please run as root."
 fi
 
 # ==========================================
 # OS CHECK
 # ==========================================
 
-if [[ ! -f /etc/os-release ]]; then
-    error "Cannot detect operating system."
-fi
-
 source /etc/os-release
 
 case "$ID" in
     ubuntu)
         case "$VERSION_ID" in
-            22.04|24.04)
-                success "Ubuntu $VERSION_ID detected."
-                ;;
-            *)
-                error "Only Ubuntu 22.04 and 24.04 are supported."
-                ;;
+            22.04|24.04) success "Ubuntu $VERSION_ID detected." ;;
+            *) error "Only Ubuntu 22.04 and 24.04 supported." ;;
         esac
         ;;
-
     debian)
         case "$VERSION_ID" in
-            11|12|13)
-                success "Debian $VERSION_ID detected."
-                ;;
-            *)
-                error "Unsupported Debian version."
-                ;;
+            11|12|13) success "Debian $VERSION_ID detected." ;;
+            *) error "Unsupported Debian version." ;;
         esac
         ;;
-
     *)
-        error "Unsupported OS: $ID"
+        error "Unsupported operating system: $ID"
         ;;
 esac
 
@@ -102,13 +84,8 @@ echo "       ARIX THEME INSTALLER"
 echo "======================================"
 echo ""
 
-if [[ ! -d "$PANEL_DIR" ]]; then
-    error "Pterodactyl directory not found."
-fi
-
-if [[ ! -f "$PANEL_DIR/package.json" ]]; then
-    error "Invalid Pterodactyl directory."
-fi
+[[ -d "$PANEL_DIR" ]] || error "Pterodactyl directory not found."
+[[ -f "$PANEL_DIR/package.json" ]] || error "Invalid Pterodactyl directory."
 
 success "Pterodactyl panel directory found."
 
@@ -130,6 +107,7 @@ choice="$REPLY"
 
 case "$choice" in
     1)
+        # Install dependencies and build
         info "Installing Node.js 22..."
 
         apt-get update -y
@@ -140,26 +118,26 @@ case "$choice" in
         apt-get install -y nodejs
 
         info "Installing Yarn..."
-
         npm install -g yarn
 
-        success "Node.js and Yarn installed."
+        cd "$PANEL_DIR"
+
+        info "Installing packages..."
+        yarn
+
+        export NODE_OPTIONS=--openssl-legacy-provider
+
+        info "Building production assets..."
+        yarn build:production
+
+        success "Dependencies installed and build completed."
         ;;
 
     2)
-        info "Checking dependencies..."
-
-        command -v node >/dev/null 2>&1 || error "Node.js missing."
-        command -v npm >/dev/null 2>&1 || error "NPM missing."
-        command -v yarn >/dev/null 2>&1 || error "Yarn missing."
-
-        NODE_VERSION=$(node -p "Number(process.versions.node.split('.')[0])")
-
-        if [[ "$NODE_VERSION" -lt 22 ]]; then
-            error "Node.js 22 or newer is required."
-        fi
-
-        success "Dependencies found."
+        # IMPORTANT:
+        # Skip ALL dependency installation and build commands.
+        info "Skipping dependency installation."
+        info "Going directly to Arix Theme installation."
         ;;
 
     3)
@@ -171,30 +149,6 @@ case "$choice" in
         error "Invalid option: $choice"
         ;;
 esac
-
-# ==========================================
-# INSTALL BUILD TOOLS
-# ==========================================
-
-apt-get install -y unzip
-
-# ==========================================
-# BUILD PANEL
-# ==========================================
-
-cd "$PANEL_DIR"
-
-info "Running yarn..."
-
-yarn
-
-export NODE_OPTIONS=--openssl-legacy-provider
-
-info "Building production assets..."
-
-yarn build:production
-
-success "Production build completed."
 
 # ==========================================
 # ARIX CONFIRMATION
@@ -211,7 +165,7 @@ arix_choice="$REPLY"
 
 case "$arix_choice" in
     y|Y|yes|YES|Yes)
-        info "Starting Arix installation..."
+        info "Starting Arix Theme installation..."
         ;;
     *)
         info "Arix installation skipped."
@@ -220,54 +174,52 @@ case "$arix_choice" in
 esac
 
 # ==========================================
-# DOWNLOAD
+# DOWNLOAD TOOLS
+# ==========================================
+
+apt-get install -y curl unzip
+
+# ==========================================
+# DOWNLOAD ARIX
 # ==========================================
 
 cd "$PANEL_DIR"
 
-info "Downloading Arix files..."
+info "Downloading Arix Theme..."
 
 rm -f "$ZIP_FILE"
 
 curl -fL --retry 3 "$ZIP_URL" -o "$ZIP_FILE" \
-    || error "Download failed."
+    || error "Failed to download Arix Theme."
 
-success "Download completed."
+success "Arix Theme downloaded."
 
 # ==========================================
 # EXTRACT
 # ==========================================
 
-info "Extracting files..."
+info "Extracting Arix Theme..."
 
 unzip -o "$ZIP_FILE" -d "$PANEL_DIR" \
     || error "Extraction failed."
 
-# ==========================================
-# DELETE ZIP
-# ==========================================
-
 rm -f "$ZIP_FILE"
 
-success "ZIP deleted."
+success "ZIP extracted and deleted."
 
 # ==========================================
-# ARIX INSTALLER
+# RUN ARIX INSTALLER
 # ==========================================
 
 cd "$PANEL_DIR"
 
-command -v php >/dev/null 2>&1 || error "PHP not installed."
+command -v php >/dev/null 2>&1 || error "PHP is not installed."
 
-info "Running PHP Arix installer..."
+info "Running Arix installer..."
 
 php install arix
 
-success "Arix installer completed."
-
-# ==========================================
-# FINISHED
-# ==========================================
+success "Arix Theme installation completed!"
 
 echo ""
 echo "======================================"
